@@ -54,7 +54,7 @@ Qualified calls, e.g., TypeOf.list(o), return a typename just as TypeOf(o) would
 		'number (array)'	[7] == 7
 	For any expression, x, that _can_ be interpreted as a number: x/1 gives you the number value.
 
-	Let this be a lesson to you: === is almost _always_ preferable to ==.
+	Let this be a lesson to you: === is _always_ preferable to ==.
 
 
 Recognizes nodes:
@@ -92,27 +92,50 @@ Does not, itself, modify any system objects... but if you want to, you can hang 
 
 */
 
+
+// The code below is entirely too clever.  It's old.  It works fine, but JavaScript has changed and some parts
+// of this code are no longer needed.  Additionally, it works on broken browsers like old IE; and _that's_ no
+// longer needed, either.
+
 var TypeOf;
 (function(){
-var U=void(0), N=null, W=window,
+var U=void(0), N=null, W=window, // short names for special globals (to save memory, believe it or not)
 	ots=Object.prototype.toString, TRIMTK_RE=/^\[.+ |\]$/g,
-	FN_TK='[object Function]', NAN_TK='[type NaN]', NUM_TK='[object Number]', OBJ_TK='[object Object]',
-	DOC_T='document', EL_T='element', EVT_T='event', FN_T='function', LIST_T='list', OBJ_T='object', WIN_T='window',
-	KNOWN_TYPE={}, LIST_TYPE={}, NODE_TYPE=[], SCALAR_TYPE={}, CHECKED_TYPE={}, FN_TYPE={};
+	FN_TK='[object Function]', NAN_TK='[type NaN]', NUM_TK='[object Number]', OBJ_TK='[object Object]', // Type-keys I use more than once
+	DOC_T='document', EL_T='element', EVT_T='event', FN_T='function', LIST_T='list', OBJ_T='object', WIN_T='window', // Type _names_ I use more than once
+	KNOWN_TYPE={}, // maps type-key to type name
+    LIST_TYPE={}, // "is this type list-like?"  Maps type-keys to either false (this type is not a list) or a string that is the specific list kind.
+    NODE_TYPE=[], // maps node.nodeType (which is an integer index) to actual node kind which is "node" for everything except the document and the window
+    SCALAR_TYPE={}, // maps type-key to type name, this dictionary is identical to KNOWN_TYPE and this probably indicates a bug
+    CHECKED_TYPE={}, // the special types that typekey() has to dive deeper into
+    FN_TYPE={}; // maps FN_TK to FN_T
 
 
+// This section deals with type-keys, that is, the string returned by Object.prototype.toString; e.g., "[object Object]".
+// All built in type-keys start with "[object ".  I add a few to disambiguate null, undefined, and NaN.
+// To identify my changes, _my_ type-keys start with "[type ".  In modern JavaScript, however, this
+// hole has been patched for null and undefined, so I could shorten this function safely.  In the following
+// code, tk (any capitalization) means whatever it is is somehow related to a type-key.
+// Throughout the code below, I use && and || to step through possibilities and return the final result
+// from the step that succeeds.
 function typekey( o ){
 	var tk=ots.call(o);
 	return tk in CHECKED_TYPE && (o===U && '[type undefined]' || o===N && '[type null]' || tk===NUM_TK && isNaN(o) && NAN_TK) || tk;
 }
 function distinct_typekey( o ){
+    // returns the type-key, but refuses to return "[object Object]"; returns false instead for that.
+    // This is because _so_ many things are "[object Object]" as far as JavaScript is concerned.
 	var tk=typekey(o);
 	return tk!==OBJ_TK && tk;
 }
 function trim( tk ){
+    // Extracts and returns just the second word (the actual type name) in a type-key.
 	return tk && tk.replace(TRIMTK_RE, '');
 }
 
+
+// The "maybe" functions below return a type name or else something falsey.
+// The "qualify" functions return an extended description of the thing.
 
 function qualify_number( o ){
 	var	tk=typekey(o), how;
@@ -129,9 +152,12 @@ function qualify_number( o ){
 }
 
 function maybe_fn( o ){
+    // This function gets replaced by something better from the initialization code for broken browsers.
 	return false;
 }
 function qualify_fn( o ){
+    // Take into account bad old browsers that called functions "[object Object]".
+    // Ugh.  This function acts more like a "maybe" function than a "qualify".
 	var qt=FN_TYPE[ typekey(o) ];
 	return (qt===OBJ_T ? maybe_fn(o) : qt) || false;
 }
@@ -141,7 +167,7 @@ function maybe_event( o ){
 }
 
 function maybe_list( o ){
-	try { return qualify_number(n=o.length)==='number' && (!n || n-1 in o) && LIST_T; } catch ( e ) {}
+	try { var n; return qualify_number(n=o.length)==='number' && (!n || n-1 in o) && LIST_T; } catch ( e ) {}
 }
 
 function maybe_node( o ){
@@ -158,17 +184,18 @@ function qualify_node( o ){
 }
 
 
-
+// This is the core of the whole file.
 TypeOf = function( o ){
+    // return a string, the type of o
 	var tk=typekey(o);
-	return KNOWN_TYPE[ tk ]
-		|| o===W && WIN_T
-		|| qualify_fn(o.__typeOf) && o.__typeOf()
+	return KNOWN_TYPE[ tk ]                         // is it a type we can deduce strictly from the type-key?
+		|| o===W && WIN_T                           // is it the global Window object?
+		|| qualify_fn(o.__typeOf) && o.__typeOf()   // does it have intrusive type information?
 		|| maybe_node(o)
 		|| maybe_event(o)
 		|| maybe_list(o)
-		|| tk===OBJ_TK && maybe_fn(o)
-		|| OBJ_T;
+		|| tk===OBJ_TK && maybe_fn(o)               // some objects are actually functions
+		|| OBJ_T;                                   // I guess we just don't know
 }
 
 
@@ -191,6 +218,7 @@ TypeOf.list = function( o ){
 TypeOf.node = qualify_node;
 TypeOf.number = qualify_number;
 TypeOf.object = function( o ){
+    // returns the type name as rendered by Object.prototype.toString
 	return trim(typekey(o).replace(NAN_TK, NUM_TK));
 };
 TypeOf.scalar = function( o ){
@@ -199,6 +227,8 @@ TypeOf.scalar = function( o ){
 
 
 (function(){
+    // This is the initialization function.  It does its job and then goes away.
+    // It would probably be better to name, run, and finally delete this function.
 	var EL_NT=1, DOC_NT=9, LAST_NT=12;
 
 	FN_TYPE[ FN_TK ] = 'function';
@@ -256,6 +286,7 @@ TypeOf.scalar = function( o ){
 		define(document.createEvent('HTMLEvents'),		false, false, EVT_T);
 	}
 
+    // This is the bit for broken browsers that don't tell you when o is a function.
 	if ( !qualify_fn(document.getElementById) ) {
 		FN_TYPE[ OBJ_TK ] = OBJ_T;
 		maybe_fn = function( o ){
