@@ -116,8 +116,8 @@ var U=void(0), N=null, W=window, // short names for special globals (to save mem
 // To identify my changes, _my_ type-keys start with "[type ".  In modern JavaScript, however, this
 // hole has been patched for null and undefined, so I could shorten this function safely.  In the following
 // code, tk (any capitalization) means whatever it is is somehow related to a type-key.
-// Throughout the code below, I use && and || to step through possibilities and return the final result
-// from the step that succeeds.
+// Throughout the code below, I use && and || to step through possibilities and return the final result from the step that
+// succeeds.
 function typekey( o ){
     var tk=ots.call(o);
     return tk in CHECKED_TYPE && (o===U && '[type undefined]' || o===N && '[type null]' || tk===NUM_TK && isNaN(o) && NAN_TK) || tk;
